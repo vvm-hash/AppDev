@@ -1,25 +1,47 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { View, Text, TextInput, Button, FlatList, StyleSheet } from 'react-native';
+import { openDatabaseAsync } from 'expo-sqlite';
 
-// Remove "App", just export default your screen
 export default function TabOneScreen() {
+  const [db, setDb] = useState<any>(null);
   const [task, setTask] = useState('');
-  const [tasks, setTasks] = useState<{ id: string; title: string }[]>([]);
+  const [tasks, setTasks] = useState<{ id: number; title: string }[]>([]);
 
-  const addTask = () => {
-    if (task.trim()) {
-      setTasks([...tasks, { id: Date.now().toString(), title: task }]);
-      setTask('');
-    }
+  useEffect(() => {
+    const initDb = async () => {
+      const database = await openDatabaseAsync('todo.db');
+      setDb(database);
+      await database.execAsync(
+        'CREATE TABLE IF NOT EXISTS tasks (id INTEGER PRIMARY KEY AUTOINCREMENT, title TEXT);'
+      );
+      fetchTasks(database);
+    };
+    initDb();
+  }, []);
+
+  const fetchTasks = async (database = db) => {
+    if (!database) return;
+    const result = await database.getAllAsync('SELECT * FROM tasks;');
+    console.log('✅ Current Tasks in DB:', result); // 👈 ADD THIS LINE
+    setTasks(result);
   };
 
-  const deleteTask = (id: string) => {
-    setTasks(tasks.filter((t) => t.id !== id));
+  const addTask = async () => {
+    if (!task.trim() || !db) return;
+    await db.runAsync('INSERT INTO tasks (title) VALUES (?);', [task]);
+    setTask('');
+    fetchTasks();
+  };
+
+  const deleteTask = async (id: number) => {
+    if (!db) return;
+    await db.runAsync('DELETE FROM tasks WHERE id = ?;', [id]);
+    fetchTasks();
   };
 
   return (
     <View style={styles.container}>
-      <Text style={styles.heading}>My ToDo List</Text>
+      <Text style={styles.heading}>SQLite To-Do List</Text>
 
       <TextInput
         style={styles.input}
@@ -32,7 +54,7 @@ export default function TabOneScreen() {
 
       <FlatList
         data={tasks}
-        keyExtractor={(item) => item.id}
+        keyExtractor={(item) => item.id.toString()}
         renderItem={({ item }) => (
           <View style={styles.taskContainer}>
             <Text style={styles.task}>{item.title}</Text>
